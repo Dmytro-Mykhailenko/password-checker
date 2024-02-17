@@ -6,33 +6,28 @@ import static org.junit.jupiter.api.Assertions.*;
 public class PasswordCheckerTest {
 
     @Test
-    void checkTheCorrectPasswordIfItHas12Chars() {
-        assertTrue( PasswordChecker.checkPasswordComplexity("Password123!") );
+    void checkCorrectPassword() {
+        assertTrue( PasswordChecker.checkPasswordComplexity("Password1234=/&¤!") );
+        assertTrue( PasswordChecker.checkPasswordComplexity("Üöäõ5_<+,") );
+        assertTrue( PasswordChecker.checkPasswordComplexity(" Пас56№?") );
     }
 
     @Test
-    void checkTheCorrectPasswordIfItHas8Chars() {
-        assertTrue( PasswordChecker.checkPasswordComplexity("Pass456?") );
-    }
-
-    @Test
-    void checkPasswordIfItHas7CharsWithDigitsAndSpecialChars() {
+    void checkPasswordIfItHasNotEnoughChars() {
         assertFalse( PasswordChecker.checkPasswordComplexity("Pas789@") );
+        assertFalse( PasswordChecker.checkPasswordComplexity("ds45 -") );
+        assertFalse( PasswordChecker.checkPasswordComplexity(" ") );
+        assertFalse( PasswordChecker.checkPasswordComplexity("") );
     }
 
     @Test
-    void checkPasswordIfItHas12CharsWithoutDigits() {
+    void checkPasswordIfItHasNoDigits() {
         assertFalse( PasswordChecker.checkPasswordComplexity("Password?@*!") );
     }
 
     @Test
-    void checkPasswordIfItHas12CharsWithoutSpecialChars() {
+    void checkPasswordIfItHasNoChars() {
         assertFalse( PasswordChecker.checkPasswordComplexity("Password9876") );
-    }
-
-    @Test
-    void checkPasswordIfItEmpty() {
-        assertFalse( PasswordChecker.checkPasswordComplexity("") );
     }
 
 }
