@@ -26,7 +26,7 @@ public class PasswordCheckerTest {
     }
 
     @Test
-    void checkPasswordIfItHasNoChars() {
+    void checkPasswordIfItHasNoSpecialChars() {
         assertFalse( PasswordChecker.checkPasswordComplexity("Password9876") );
     }
 
