@@ -340,8 +340,8 @@ public class RestApiMockedTest {
 
         while (!PerformanceTest.stop && PerformanceTest.timer > 0) {
 
-            PerformanceTest.timer -= 100;
-            Thread.sleep(100);
+            PerformanceTest.timer -= 1000;
+            Thread.sleep(1000);
 
             double minLoad = thrd[0].threadCurrentLoad;
             double maxLoad = 0;
