@@ -1,7 +1,5 @@
 package api;
 
-//import com.google.gson.JsonObject;
-
 import io.restassured.response.Response;
 import org.apache.http.HttpStatus;
 import org.junit.jupiter.api.BeforeAll;
@@ -205,35 +203,6 @@ public class RestApiMockedTest {
 
     }
 
-//    @Test
-//    public void createAnOrderWithCorrectJsonDataCheckResponseBodyAndResponseCodeIsOk() {
-//
-//        JsonObject body = new JsonObject();
-//        body.addProperty("status", "OPEN");
-//        body.addProperty("courierId", 0);
-//        body.addProperty("customerName", "dm");
-//        body.addProperty("customerPhone", 123456);
-//        body.addProperty("comment", "qwerty");
-//        body.addProperty("id", 0);
-//
-//        Response response = given()
-//                .header("Accept", "application/json")
-//                .header("Content-type", "application/json")
-//                .body(body)
-//                .log()
-//                .all()
-//                .when()
-//                .post("/test-orders")
-//                .then()
-//                .log()
-//                .all()
-//                .statusCode(HttpStatus.SC_OK)
-//                .and()
-//                .extract()
-//                .response();
-//
-//    }
-
     @ParameterizedTest
     @ValueSource(strings = {
 
@@ -318,64 +287,13 @@ public class RestApiMockedTest {
     @ParameterizedTest
     @CsvSource({
             //Threads, required requests per sec, timer
-            "15, 30, 30",
-            "40, 20, 240"
+            "20, 30, 30",
+            "15, 20, 240"
     })
     public void performanceTestOfGetAllOrdersEndpoint(int threadsAmount, int load, int timer)
             throws InterruptedException {
 
-        PerformanceTest.timer = timer * 1000;
-        PerformanceTest.load = (double) load / threadsAmount;
-        PerformanceTest.startTime = PerformanceTest.timer;
-        PerformanceTest.caughtCode = 0;
-        PerformanceTest.stop = false;
-
-        PerformanceTest[] thrd = new PerformanceTest[threadsAmount];
-
-        for (int i = 0; i < thrd.length; i++) {
-
-            thrd[i] = PerformanceTest.createAndStart("Thread-" + i);
-
-        }
-
-        while (!PerformanceTest.stop && PerformanceTest.timer > 0) {
-
-            PerformanceTest.timer -= 1000;
-            Thread.sleep(1000);
-
-            double minLoad = thrd[0].threadCurrentLoad;
-            double maxLoad = 0;
-            int minRequestsCount = thrd[0].requestsCount;
-            int maxRequestsCount = 0;
-            int totalRequestsCount = 0;
-
-            for (int i = 0; i < thrd.length; i++) {
-
-                totalRequestsCount += thrd[i].requestsCount;
-
-                if (maxLoad < thrd[i].threadCurrentLoad) maxLoad = thrd[i].threadCurrentLoad;
-                if (minLoad > thrd[i].threadCurrentLoad) minLoad = thrd[i].threadCurrentLoad;
-
-                if (maxRequestsCount < thrd[i].requestsCount) maxRequestsCount = thrd[i].requestsCount;
-                if (minRequestsCount > thrd[i].requestsCount) minRequestsCount = thrd[i].requestsCount;
-
-            }
-
-            double i = timer - PerformanceTest.timer * 0.001;
-            double s = (double) totalRequestsCount / thrd.length;
-
-            System.out.println("\nAvg. req/sec: " + String.format("%.3f", totalRequestsCount / i) +
-                    " | Req/sec from each thread(" + thrd.length + ") min-avg-max: " +
-                    String.format("%.3f", minLoad) + " - " + String.format("%.3f", s / i) + " - " + String.format("%.3f", maxLoad) +
-                    " | Total req.: " + totalRequestsCount + " | Time rem.: " + PerformanceTest.timer / 1000);
-
-        }
-
-        Thread.sleep(5000);
-
-        PerformanceTest.clear(thrd);
-
-        assertEquals(200, PerformanceTest.caughtCode);
+        assertEquals(200, PerformanceTest.test(threadsAmount, load, timer));
 
     }
 }
@@ -392,6 +310,10 @@ class PerformanceTest implements Runnable {
     double threadCurrentLoad;
     int threadStatusCode;
     int requestsCount;
+    int sumRespT;
+    int respTime;
+    int minResponseTime;
+    int maxResponseTime;
     int time;
     int thrdTimer;
 
@@ -413,6 +335,81 @@ class PerformanceTest implements Runnable {
 
     }
 
+    static int test(int threadsAmount, int load, int timer) throws InterruptedException {
+
+        PerformanceTest.startTime = PerformanceTest.timer = timer * 1000;
+        PerformanceTest.load = (load * 0.001) / threadsAmount;
+        PerformanceTest.caughtCode = 0;
+        PerformanceTest.stop = false;
+
+        PerformanceTest[] thrd = new PerformanceTest[threadsAmount];
+
+        for (int i = 0; i < thrd.length; i++) {
+
+            thrd[i] = PerformanceTest.createAndStart("Thread-" + i);
+
+        }
+
+        while (!PerformanceTest.stop && PerformanceTest.timer > 0) {
+
+            Thread.sleep(1000);
+            PerformanceTest.timer -= 1000;
+
+            double minRespT = 0;
+            double maxRespT = 0;
+            double sumOfAvgRespT = 0;
+            int totalRequestsCount = 0;
+            double minLoad = 0;
+            double maxLoad = 0;
+            int isAlive = 0;
+
+            for (PerformanceTest performanceTest : thrd) {
+
+                if (performanceTest.thisThread.isAlive()) isAlive++;
+
+                if (minRespT == 0 || minRespT > performanceTest.minResponseTime)
+                    minRespT = performanceTest.minResponseTime;
+                if (maxRespT == 0 || maxRespT < performanceTest.maxResponseTime)
+                    maxRespT = performanceTest.maxResponseTime;
+
+                totalRequestsCount += performanceTest.requestsCount;
+                sumOfAvgRespT += (double) performanceTest.sumRespT / performanceTest.requestsCount;
+
+                if (maxLoad == 0 || maxLoad < performanceTest.threadCurrentLoad)
+                    maxLoad = performanceTest.threadCurrentLoad;
+
+                if (minLoad == 0 || minLoad > performanceTest.threadCurrentLoad)
+                    minLoad = performanceTest.threadCurrentLoad;
+
+            }
+
+            if (isAlive == 0) {
+
+                System.out.println("All threads are interrupted!");
+                PerformanceTest.stop = true;
+
+            }
+
+            double i = timer - PerformanceTest.timer * 0.001;
+            double s = (double) totalRequestsCount / thrd.length;
+            double avgRespT = sumOfAvgRespT / thrd.length;
+
+            System.out.println("\u21cb\nTotal avg. req/sec:\t\t\t\t\t\t\t\t  " + String.format("%.2f", totalRequestsCount / i) +
+                    "\nReq/sec from each thread(" + isAlive + ") min-avg-max: " + String.format("%.3f", minLoad * 1000) +
+                    " - " + String.format("%.3f", s / i) + " - " + String.format("%.3f", maxLoad * 1000) +
+                    "\nResp. time min-avg-max:\t\t\t\t\t  " + String.format("%.3f", minRespT * 0.001) +
+                    " - " + String.format("%.3f", avgRespT * 0.001) + " - " + String.format("%.3f", maxRespT * 0.001) +
+                    "\nTime rem.: \t\t\t\t\t\t\t\t\t\t\t" + PerformanceTest.timer / 1000);
+
+        }
+
+        Thread.sleep(5000);
+        PerformanceTest.clear(thrd);
+
+        return PerformanceTest.caughtCode;
+
+    }
+
     public static PerformanceTest createAndStart(String name) {
 
         PerformanceTest myThrd = new PerformanceTest(name);
@@ -431,7 +428,7 @@ class PerformanceTest implements Runnable {
 
             if (thrdTimer != timer) thrdTimer = time = timer;
 
-            threadCurrentLoad = requestsCount / ((startTime - time) * 0.001);
+            threadCurrentLoad = (double) requestsCount / (startTime - time);
 
             if (threadCurrentLoad <= load) {
 
@@ -440,9 +437,15 @@ class PerformanceTest implements Runnable {
                         .extract()
                         .response();
 
-                threadStatusCode = response.statusCode();
-                time -= (int) response.getTime();
                 requestsCount++;
+                threadStatusCode = response.statusCode();
+                respTime = (int) response.getTime();
+                sumRespT += respTime;
+                time -= respTime;
+
+                if (minResponseTime == 0 || minResponseTime > respTime) minResponseTime = respTime;
+
+                if (maxResponseTime == 0 || maxResponseTime < respTime) maxResponseTime = respTime;
 
                 if (stop) return;
 
@@ -451,17 +454,19 @@ class PerformanceTest implements Runnable {
                     stop = true;
                     caughtCode = threadStatusCode;
                     threadThatStoppedTest = thisThread.getName();
-                    System.out.println("\n" + threadThatStoppedTest + " stopped the test!");
+                    System.out.println("\n================================\n" + threadThatStoppedTest +
+                            " stopped the test!" + "\n================================");
                     return;
 
                 } else caughtCode = threadStatusCode;
 
             } else {
 
-                time--;
+                time = time - 400;
 
                 try {
-                    Thread.sleep(1);
+                    System.out.print('.');
+                    Thread.sleep(400);
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
