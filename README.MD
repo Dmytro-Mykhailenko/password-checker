@@ -59,8 +59,18 @@ ___
 
 ### /Create an order
 
-| № | Check name                                                                                  | Status |
-|---|---------------------------------------------------------------------------------------------|--------|
-| 1 | Create order with correct Json data. Check matches in response body and response code is Ok | Pass   |
-| 2 | Create order with correct Json data but without headers. Check response code is Bad Request | Pass   |
-| 3 | Create order with incorrect Json data. Check response body and response code is Bad Request | Pass   |
+| № | Check name                                                                                             | Status |
+|---|--------------------------------------------------------------------------------------------------------|--------|
+| 1 | Create order with correct Json data. Check matches in response body and response code is Ok            | Pass   |
+| 2 | Create order with correct Json data but without headers. Check response code is Unsupported Media Type | Pass   |
+| 3 | Create order with incorrect Json data. Check response body and response code is Bad Request            | Pass   |
+
+### /Update an order by ID
+
+| № | Check name                                                                                         | Status |
+|---|----------------------------------------------------------------------------------------------------|--------|
+| 1 | Update status with valid id and api key. Check updates in response body and response code is Ok    | Fail   |
+| 2 | Trying to update status with invalid api key. Check response code is Unauthorized                  | Pass   |
+| 3 | Trying to update status without content type header. Check response code is Unsupported Media Type | Pass   |
+| 4 | Trying to update status using invalid data in body. Check response code is Bad Request             | Fail   |
+| 5 | Trying to update status with invalid id. Check response code is Order Not Found                    | Fail   |

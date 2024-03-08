@@ -1,5 +1,7 @@
 package api;
 
+import com.google.gson.Gson;
+import dto.OrderDtoMocked;
 import io.restassured.response.Response;
 import org.apache.http.HttpStatus;
 import org.junit.jupiter.api.BeforeAll;
@@ -7,6 +9,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import utils.GetAllOrdersPerformanceTest;
+import utils.RandomDataGenerator;
 
 import static io.restassured.RestAssured.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -32,7 +36,6 @@ public class RestApiMockedTest {
     public void loginWithValidUsernameAndPasswordCheckResponseBodyAndResponseCodeIsOk(String username, String password) {
 
         Response response = given()
-                .header("content-type", "application/json")
                 .log()
                 .all()
                 .when()
@@ -54,7 +57,6 @@ public class RestApiMockedTest {
     public void loginWithoutUsernameAndPasswordCheckResponseBodyAndResponseCodeIsBadRequest() {
 
         Response response = given()
-                .header("Content-type", "application/json")
                 .log()
                 .all()
                 .when()
@@ -75,8 +77,6 @@ public class RestApiMockedTest {
     @Test
     public void getAllOrderAndCheckResponseCodeIsOk() {
 
-        System.out.println("\n===========================");
-        //RestAssured
         given()
                 .log()
                 .all()
@@ -93,7 +93,6 @@ public class RestApiMockedTest {
     @ValueSource(ints = {1, 2, 5, 9, 10})
     public void getOrderByValidIdCheckMatchesInResponseBodyAndResponseCodeIsOk(int validId) {
 
-        System.out.println("\n===========================");
         Response response = given()
                 .log()
                 .all()
@@ -118,7 +117,6 @@ public class RestApiMockedTest {
     @ValueSource(ints = {-1, 0, 11, 12, 20})
     public void getOrderByInvalidIdAndCheckResponseCodeIsBadRequest(int invalidId) {
 
-        System.out.println("\n===========================");
         given()
                 .log()
                 .all()
@@ -135,7 +133,6 @@ public class RestApiMockedTest {
     @ValueSource(ints = {1, 2, 5, 9, 10})
     public void deleteOrderIfValidIdAndApiKeyCheckResponseCodeIsOk(int validId) {
 
-        System.out.println("\n===========================");
         given()
                 .log()
                 .all()
@@ -153,7 +150,6 @@ public class RestApiMockedTest {
     @ValueSource(ints = {-1, 0, 11, 12, 20})
     public void deleteOrderIfInvalidIdAndCheckResponseCodeIsBadRequest(int invalidId) {
 
-        System.out.println("\n===========================");
         given()
                 .log()
                 .all()
@@ -173,7 +169,6 @@ public class RestApiMockedTest {
             "98765432109876543", "09876543210987654321"})
     public void deleteOrderIfInvalidApiKeyAndCheckResponseCodeIsUnauthorized(String invalidApiKey) {
 
-        System.out.println("\n===========================");
         given()
                 .log()
                 .all()
@@ -190,7 +185,6 @@ public class RestApiMockedTest {
     @Test
     public void deleteOrderIfNoHeaderFieldAndCheckResponseCodeIsBadRequest() {
 
-        System.out.println("\n===========================");
         given()
                 .log()
                 .all()
@@ -200,6 +194,36 @@ public class RestApiMockedTest {
                 .log()
                 .all()
                 .statusCode(HttpStatus.SC_BAD_REQUEST);
+
+    }
+
+    @Test
+    public void createOrderWithCorrectJsonDataUsingDTOCheckMatchesInResponseBodyAndResponseCodeIsOk() {
+
+        OrderDtoMocked orderDtoMocked = new OrderDtoMocked();
+        orderDtoMocked.setStatus("OPEN");
+        orderDtoMocked.setCourierId(0);
+        orderDtoMocked.setCustomerName(RandomDataGenerator.generateName());
+        orderDtoMocked.setCustomerPhone(RandomDataGenerator.generatePhone());
+        orderDtoMocked.setComment(RandomDataGenerator.generateComment());
+        orderDtoMocked.setId(0);
+
+        String name = given()
+                .header("Accept", "application/json")
+                .header("Content-type", "application/json")
+                .body(new Gson().toJson(orderDtoMocked))
+                .log()
+                .all()
+                .when()
+                .post("/test-orders")
+                .then()
+                .log()
+                .all()
+                .statusCode(HttpStatus.SC_OK)
+                .extract()
+                .path("customerName");
+
+        assertEquals(orderDtoMocked.getCustomerName(), name);
 
     }
 
@@ -236,19 +260,18 @@ public class RestApiMockedTest {
     String str = "\"status\": \"OPEN\", \"courierId\": 0, \"customerName\": \"dm\", \"customerPhone\": 123456, \"comment\": \"qwerty\", \"id\": 0";
 
     @Test
-    public void createOrderWithCorrectJsonDataButWithoutHeadersCheckResponseCodeIsBadRequest() {
+    public void createOrderWithCorrectJsonDataButWithoutHeadersCheckResponseCodeIsUnsupportedMediaType() {
 
-        System.out.println("\n===========================");
         given()
                 .body(str)
                 .log()
                 .all()
                 .when()
-                .delete("/test-orders/7")
+                .post("/test-orders")
                 .then()
                 .log()
                 .all()
-                .statusCode(HttpStatus.SC_BAD_REQUEST);
+                .statusCode(HttpStatus.SC_UNSUPPORTED_MEDIA_TYPE);
 
     }
 
@@ -288,189 +311,156 @@ public class RestApiMockedTest {
     @CsvSource({
             //Threads, required requests per sec, timer
             "20, 30, 30",
-            "15, 20, 240"
+            "15, 20, 60"
     })
     public void performanceTestOfGetAllOrdersEndpoint(int threadsAmount, int load, int timer)
             throws InterruptedException {
 
-        assertEquals(200, PerformanceTest.test(threadsAmount, load, timer));
-
-    }
-}
-
-class PerformanceTest implements Runnable {
-
-    Thread thisThread;
-    static String threadThatStoppedTest;
-    static double load;
-    static int timer;
-    static int startTime;
-    static int caughtCode;
-    static volatile boolean stop;
-    double threadCurrentLoad;
-    int threadStatusCode;
-    int requestsCount;
-    int sumRespT;
-    int respTime;
-    int minResponseTime;
-    int maxResponseTime;
-    int time;
-    int thrdTimer;
-
-    PerformanceTest(String name) {
-
-        thisThread = new Thread(this, name);
+        assertEquals(200, GetAllOrdersPerformanceTest.test(threadsAmount, load, timer));
 
     }
 
-    static void clear(PerformanceTest[] tth) {
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 5, 9, 10})
+    public void updateStatusWithValidIdAndApiKeyCheckUpdatesInResponseBodyAndResponseCodeIsOk(int ID) {
 
-        for (PerformanceTest testThread : tth) {
+        OrderDtoMocked orderDtoMocked = new OrderDtoMocked();
+        orderDtoMocked.setStatus("ACCEPTED");
+        orderDtoMocked.setCourierId(0);
+        orderDtoMocked.setCustomerName(RandomDataGenerator.generateName());
+        orderDtoMocked.setCustomerPhone(RandomDataGenerator.generatePhone());
+        orderDtoMocked.setComment(RandomDataGenerator.generateComment());
+        orderDtoMocked.setId(0);
 
-            if (testThread.thisThread.isAlive()) testThread.thisThread.interrupt();
+        String status = given()
+                .header("Accept", "application/json")
+                .header("Content-type", "application/json")
+                .header("api_key", RandomDataGenerator.generateValidApiKey())
+                .body(new Gson().toJson(orderDtoMocked))
+                .log()
+                .all()
+                .when()
+                .put("/test-orders/{ID}", ID)
+                .then()
+                .log()
+                .all()
+                .statusCode(HttpStatus.SC_OK)
+                .extract()
+                .path("status");
 
-        }
-
-        PerformanceTest.threadThatStoppedTest = "";
-
-    }
-
-    static int test(int threadsAmount, int load, int timer) throws InterruptedException {
-
-        PerformanceTest.startTime = PerformanceTest.timer = timer * 1000;
-        PerformanceTest.load = (load * 0.001) / threadsAmount;
-        PerformanceTest.caughtCode = 0;
-        PerformanceTest.stop = false;
-
-        PerformanceTest[] thrd = new PerformanceTest[threadsAmount];
-
-        for (int i = 0; i < thrd.length; i++) {
-
-            thrd[i] = PerformanceTest.createAndStart("Thread-" + i);
-
-        }
-
-        while (!PerformanceTest.stop && PerformanceTest.timer > 0) {
-
-            Thread.sleep(1000);
-            PerformanceTest.timer -= 1000;
-
-            double minRespT = 0;
-            double maxRespT = 0;
-            double sumOfAvgRespT = 0;
-            int totalRequestsCount = 0;
-            double minLoad = 0;
-            double maxLoad = 0;
-            int isAlive = 0;
-
-            for (PerformanceTest performanceTest : thrd) {
-
-                if (performanceTest.thisThread.isAlive()) isAlive++;
-
-                if (minRespT == 0 || minRespT > performanceTest.minResponseTime)
-                    minRespT = performanceTest.minResponseTime;
-                if (maxRespT == 0 || maxRespT < performanceTest.maxResponseTime)
-                    maxRespT = performanceTest.maxResponseTime;
-
-                totalRequestsCount += performanceTest.requestsCount;
-                sumOfAvgRespT += (double) performanceTest.sumRespT / performanceTest.requestsCount;
-
-                if (maxLoad == 0 || maxLoad < performanceTest.threadCurrentLoad)
-                    maxLoad = performanceTest.threadCurrentLoad;
-
-                if (minLoad == 0 || minLoad > performanceTest.threadCurrentLoad)
-                    minLoad = performanceTest.threadCurrentLoad;
-
-            }
-
-            if (isAlive == 0) {
-
-                System.out.println("All threads are interrupted!");
-                PerformanceTest.stop = true;
-
-            }
-
-            double i = timer - PerformanceTest.timer * 0.001;
-            double s = (double) totalRequestsCount / thrd.length;
-            double avgRespT = sumOfAvgRespT / thrd.length;
-
-            System.out.println("\u21cb\nTotal avg. req/sec:\t\t\t\t\t\t\t\t  " + String.format("%.2f", totalRequestsCount / i) +
-                    "\nReq/sec from each thread(" + isAlive + ") min-avg-max: " + String.format("%.3f", minLoad * 1000) +
-                    " - " + String.format("%.3f", s / i) + " - " + String.format("%.3f", maxLoad * 1000) +
-                    "\nResp. time min-avg-max:\t\t\t\t\t  " + String.format("%.3f", minRespT * 0.001) +
-                    " - " + String.format("%.3f", avgRespT * 0.001) + " - " + String.format("%.3f", maxRespT * 0.001) +
-                    "\nTime rem.: \t\t\t\t\t\t\t\t\t\t\t" + PerformanceTest.timer / 1000);
-
-        }
-
-        Thread.sleep(5000);
-        PerformanceTest.clear(thrd);
-
-        return PerformanceTest.caughtCode;
+        assertEquals(orderDtoMocked.getStatus(), status);
 
     }
 
-    public static PerformanceTest createAndStart(String name) {
+    @ParameterizedTest
+    @ValueSource(strings = {"", "3", "67594063", "123456789012345",
+            "qwertyuiopasdfgh", "5w2r4y7i3p1s6f8h", "$&*()_+-=|:<>'`~", "123456789.098765",
+            "98765432109876543", "09876543210987654321"})
+    public void tryingToUpdateStatusWithInvalidApiKeyCheckThatResponseCodeIsUnauthorized(String invalidApiKey) {
 
-        PerformanceTest myThrd = new PerformanceTest(name);
-        myThrd.thisThread.start();
+        OrderDtoMocked orderDtoMocked = new OrderDtoMocked();
+        orderDtoMocked.setStatus("ACCEPTED");
+        orderDtoMocked.setCourierId(0);
+        orderDtoMocked.setCustomerName(RandomDataGenerator.generateName());
+        orderDtoMocked.setCustomerPhone(RandomDataGenerator.generatePhone());
+        orderDtoMocked.setComment(RandomDataGenerator.generateComment());
+        orderDtoMocked.setId(0);
 
-        return myThrd;
+        given()
+                .header("Accept", "application/json")
+                .header("Content-type", "application/json")
+                .header("api_key", invalidApiKey)
+                .body(new Gson().toJson(orderDtoMocked))
+                .log()
+                .all()
+                .when()
+                .put("/test-orders/" + RandomDataGenerator.generateValidId())
+                .then()
+                .log()
+                .all()
+                .statusCode(HttpStatus.SC_UNAUTHORIZED);
 
     }
 
-    @Override
-    public void run() {
+    @Test
+    public void tryingToUpdateStatusWithoutContentTypeHeaderCheckThatResponseCodeIsUnsupportedMediaType() {
 
-        thrdTimer = time = timer;
+        OrderDtoMocked orderDtoMocked = new OrderDtoMocked();
+        orderDtoMocked.setStatus("ACCEPTED");
+        orderDtoMocked.setCourierId(0);
+        orderDtoMocked.setCustomerName(RandomDataGenerator.generateName());
+        orderDtoMocked.setCustomerPhone(RandomDataGenerator.generatePhone());
+        orderDtoMocked.setComment(RandomDataGenerator.generateComment());
+        orderDtoMocked.setId(0);
 
-        while (caughtCode != 429 && timer != 0 && !stop) {
+        given()
+                .header("Accept", "application/json")
+                .header("api_key", RandomDataGenerator.generateValidApiKey())
+                .body(new Gson().toJson(orderDtoMocked))
+                .log()
+                .all()
+                .when()
+                .put("/test-orders/" + RandomDataGenerator.generateValidApiKey())
+                .then()
+                .log()
+                .all()
+                .statusCode(HttpStatus.SC_UNSUPPORTED_MEDIA_TYPE);
 
-            if (thrdTimer != timer) thrdTimer = time = timer;
+    }
 
-            threadCurrentLoad = (double) requestsCount / (startTime - time);
+    @ParameterizedTest
+    @ValueSource(strings = {"", "0", "1", "2", "3", "qwerty"})
+    public void tryingToUpdateStatusUsingInvalidDataInBodyCheckThatResponseCodeIsBadRequest(String str) {
 
-            if (threadCurrentLoad <= load) {
+        OrderDtoMocked orderDtoMocked = new OrderDtoMocked();
+        orderDtoMocked.setStatus(str);
+        orderDtoMocked.setCourierId(0);
+        orderDtoMocked.setCustomerName(RandomDataGenerator.generateName());
+        orderDtoMocked.setCustomerPhone(RandomDataGenerator.generatePhone());
+        orderDtoMocked.setComment(RandomDataGenerator.generateComment());
+        orderDtoMocked.setId(0);
 
-                Response response = get("http://35.208.34.242:8080/test-orders/get_orders")
-                        .then()
-                        .extract()
-                        .response();
+        given()
+                .header("Accept", "application/json")
+                .header("Content-type", "application/json")
+                .header("api_key", RandomDataGenerator.generateValidApiKey())
+                .body(new Gson().toJson(orderDtoMocked))
+                .log()
+                .all()
+                .when()
+                .put("/test-orders/" + RandomDataGenerator.generateValidId())
+                .then()
+                .log()
+                .all()
+                .statusCode(HttpStatus.SC_BAD_REQUEST);
 
-                requestsCount++;
-                threadStatusCode = response.statusCode();
-                respTime = (int) response.getTime();
-                sumRespT += respTime;
-                time -= respTime;
+    }
 
-                if (minResponseTime == 0 || minResponseTime > respTime) minResponseTime = respTime;
+    @ParameterizedTest
+    @ValueSource(ints = {0, 11, 12, 20})
+    public void tryingToUpdateStatusWithInvalidIdCheckThatResponseCodeIsBadRequest(int ID) {
 
-                if (maxResponseTime == 0 || maxResponseTime < respTime) maxResponseTime = respTime;
+        OrderDtoMocked orderDtoMocked = new OrderDtoMocked();
+        orderDtoMocked.setStatus("ACCEPTED");
+        orderDtoMocked.setCourierId(0);
+        orderDtoMocked.setCustomerName(RandomDataGenerator.generateName());
+        orderDtoMocked.setCustomerPhone(RandomDataGenerator.generatePhone());
+        orderDtoMocked.setComment(RandomDataGenerator.generateComment());
+        orderDtoMocked.setId(0);
 
-                if (stop) return;
+        given()
+                .header("Accept", "application/json")
+                .header("Content-type", "application/json")
+                .header("api_key", RandomDataGenerator.generateValidApiKey())
+                .body(new Gson().toJson(orderDtoMocked))
+                .log()
+                .all()
+                .when()
+                .put("/test-orders/{ID}", ID)
+                .then()
+                .log()
+                .all()
+                .statusCode(HttpStatus.SC_NOT_FOUND);
 
-                else if (threadStatusCode == 429) {
-
-                    stop = true;
-                    caughtCode = threadStatusCode;
-                    threadThatStoppedTest = thisThread.getName();
-                    System.out.println("\n================================\n" + threadThatStoppedTest +
-                            " stopped the test!" + "\n================================");
-                    return;
-
-                } else caughtCode = threadStatusCode;
-
-            } else {
-
-                time = time - 400;
-
-                try {
-                    System.out.print('.');
-                    Thread.sleep(400);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-        }
     }
 }
